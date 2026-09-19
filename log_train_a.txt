@@ -1,4 +1,9 @@
-train (23400, 16) test (6000, 16)
-Naive  MAE 127.07 RMSE 1076.38 WAPE 0.693
-RF     MAE 112.03 RMSE 1068.95 WAPE 0.611
-GB     MAE 112.45 RMSE 1068.85 WAPE 0.614
+[A] split at 2011-07-25: train=23,700 test=5,700
+
+[A] DEMAND FORECASTING RESULTS (exact reproduction)
+                        MAE      RMSE   WAPE
+Model                                      
+Naive (lag-1)      129.095  1103.695  0.690
+Random Forest      113.579  1094.832  0.607
+Gradient Boosting  111.235  1095.151  0.595 
+

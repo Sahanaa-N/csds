@@ -21,42 +21,54 @@ was deliberately chosen to be outside the AI systems (companions, chatbots, gene
 that \emph{Relational Futures} itself discusses, per the assignment's requirement that the case
 study not duplicate the paper's own examples.
 
-\subsection{Part 2: reconstructing the Task 1 pipeline}
+\subsection{Part 2: locating and verifying the exact Task 1 pipeline}
 
-Task 1: Part 1 was written from an analysis whose code was not submitted with the report (only the
-LaTeX write-up and result figures were retained). To evaluate that analysis's cross-validation
-strategy, learning curves, and bias, the pipeline was rebuilt from the two original raw datasets
-(UCI Online Retail II~\cite{chen2019onlineretailii} and UCI Online Shoppers Purchasing Intention
-Dataset~\cite{sakar2018shoppers}) by following the preprocessing description in Task 1's own
-process documentation (cleaning rules, product-week panel construction, feature list, split
-dates). The reconstruction was verified against Task 1's reported figures before being extended:
-it reproduced 106 weeks, a 31,800-row panel, 29,400 rows after lag construction, and 97.2\% of raw
-rows retained after cleaning, all matching Task 1 exactly, and produced held-out metrics within a
-few percentage points of Task 1's reported MAE/RMSE/WAPE and PR-AUC/ROC-AUC/F1 (Listing~\ref{lst:pipeline_a}
-and Listings~\ref{lst:train_a}--\ref{lst:train_b}). This gave confidence that the reconstruction
-was faithful enough to build the Part 2 analysis on.
+Task 1: Part 1 was first written up without its analysis notebook being submitted alongside the
+report (only the LaTeX write-up and result figures were originally available for this
+deliberation). Dataset A's pipeline was initially rebuilt from scratch, from the two raw UCI
+datasets, by following the preprocessing description in Task 1's own process documentation
+(cleaning rules, product-week panel construction, feature list, split date). That first
+reconstruction reproduced Task 1's reported row counts exactly, but used approximate model
+hyperparameters and a slightly different feature set, since the original code was not available.
+
+The author subsequently located and shared the original analysis notebook
+(\texttt{Part1\_3\_Analysis.ipynb}) from the project's GitHub repository. Dataset A's pipeline,
+model hyperparameters (\texttt{RandomForestRegressor(min\_samples\_leaf=3)},
+\texttt{HistGradientBoostingRegressor(max\_iter=400, learning\_rate=0.06, min\_samples\_leaf=20)})
+and full 12-feature set (including an \texttt{is\_q4} calendar flag absent from the first
+reconstruction) were then corrected to match the real notebook exactly, and re-run
+(Listings~\ref{lst:pipeline_a}--\ref{lst:train_a}). This exact pipeline reproduces Task 1's
+reported Dataset A table digit-for-digit: MAE/RMSE/WAPE of 129.095/1103.695/0.690 (naive),
+113.579/1094.832/0.607 (Random Forest) and 111.235/1095.151/0.595 (Gradient Boosting). All
+Dataset A results in Sections~1--4 of the main text (cross-validation, learning curve, and bias
+analysis) use this exact, verified pipeline. The original notebook's Dataset B cell was not
+recovered before this deliberation was finalised; Dataset B's cross-validation and bias results
+therefore use the same-spirit reconstruction described in Section~2.2 of the assignment brief
+(stratified split, comparable preprocessing), which independently reproduced Task 1's reported
+Dataset B metrics to within a few hundredths (e.g.\ PR-AUC 0.725 vs.\ Task 1's reported 0.721 for
+Random Forest) --- close enough to support the qualitative conclusions drawn, but not a verified
+byte-for-byte match the way Dataset A is.
 
 \lstinputlisting[language=Python, basicstyle=\ttfamily\scriptsize, caption={Dataset A preprocessing: cleaning, product-week panel construction,
-and feature engineering.}, label={lst:pipeline_a}]{code/pipeline_a.py}
+and feature engineering (matches the original notebook exactly).}, label={lst:pipeline_a}]{code/pipeline_a.py}
 
-\lstinputlisting[language=Python, basicstyle=\ttfamily\scriptsize, caption={Dataset A: temporal train/test split and model training (Random
-Forest, Gradient Boosting, naive baseline).}, label={lst:train_a}]{code/train_a.py}
+\lstinputlisting[language=Python, basicstyle=\ttfamily\scriptsize, caption={Dataset A: exact temporal split (80th-percentile cutoff) and model training
+with the original notebook's hyperparameters.}, label={lst:train_a}]{code/train_a.py}
 
-\textbf{Console output (Dataset A reconstruction):}
+\textbf{Console output (exact reproduction of Task 1's Dataset A table):}
 \begin{lstlisting}
-raw (1067371, 8)
-cleaned (1037007, 8) retained 97.155%
-n weeks 106
-panel shape (31800, 5)
-after lag construction (29400, 16)
-train (23400, 16) test (6000, 16)
-Naive  MAE 127.07 RMSE 1076.38 WAPE 0.693
-RF     MAE 112.03 RMSE 1068.95 WAPE 0.611
-GB     MAE 112.45 RMSE 1068.85 WAPE 0.614
+[A] split at 2011-07-25: train=23,700 test=5,700
+
+[A] DEMAND FORECASTING RESULTS (exact reproduction)
+                        MAE      RMSE   WAPE
+Model
+Naive (lag-1)      129.095  1103.695  0.690
+Random Forest      113.579  1094.832  0.607
+Gradient Boosting  111.235  1095.151  0.595
 \end{lstlisting}
 
 \lstinputlisting[language=Python, basicstyle=\ttfamily\scriptsize, caption={Dataset B: preprocessing, stratified train/test split, and model
-training with F1-tuned threshold.}, label={lst:train_b}]{code/train_b.py}
+training with F1-tuned threshold (independent reconstruction).}, label={lst:train_b}]{code/train_b.py}
 
 \textbf{Console output (Dataset B reconstruction):}
 \begin{lstlisting}
@@ -67,19 +79,44 @@ GB         PR-AUC 0.712 ROC-AUC 0.924 F1 0.659 (thr=0.338)
 Always-no  PR-AUC 0.155 ROC-AUC 0.500 F1 0.000
 \end{lstlisting}
 
-\subsection{Cross-validation comparison}
+\subsection{Cross-validation, learning curve and bias analysis (exact Dataset A pipeline)}
 
-\lstinputlisting[language=Python, basicstyle=\ttfamily\scriptsize, caption={Comparing naive random K-fold against TimeSeriesSplit (Dataset A) and
-StratifiedKFold (Dataset B).}, label={lst:cv}]{code/cv_analysis.py}
+\lstinputlisting[language=Python, basicstyle=\ttfamily\scriptsize, caption={Cross-validation comparison, learning curve, and revenue-tier bias
+analysis, all run on the exact Dataset A pipeline and hyperparameters.}, label={lst:exact}]{code/exact_analysis.py}
 
 \textbf{Console output:}
 \begin{lstlisting}
-=== Dataset A: naive random 5-fold CV (leaks future into past) ===
-Random KFold WAPE per fold: [0.69, 0.749, 0.68, 0.694, 0.66] mean 0.695
+=== CV comparison (exact features/model) ===
+Random KFold WAPE per fold: [0.66, 0.689, 0.674, 0.673, 0.644] mean 0.668
+TimeSeriesSplit WAPE per fold: [0.579, 0.602, 0.721, 0.666, 0.602] mean 0.634
 
-=== Dataset A: TimeSeriesSplit 5-fold CV (respects chronology) ===
-TimeSeriesSplit WAPE per fold: [0.572, 0.636, 0.716, 0.662, 0.605] mean 0.638
+=== Learning curve (exact pipeline) ===
+  n=  2370  WAPE=0.643
+  n=  4740  WAPE=0.637
+  n=  7110  WAPE=0.625
+  n=  9480  WAPE=0.628
+  n= 11850  WAPE=0.621
+  n= 14220  WAPE=0.603
+  n= 16590  WAPE=0.619
+  n= 18960  WAPE=0.595
+  n= 21330  WAPE=0.609
+  n= 23700  WAPE=0.589
 
+=== Bias by product revenue tier (exact pipeline) ===
+                     n_obs         MAE      WAPE  mean_actual_demand
+tier
+Low (bottom third)  1900.0  133.857830  0.683723          195.777895
+Mid (middle third)  1900.0   76.869077  0.591996          129.847368
+High (top third)    1900.0  119.933492  0.509682          235.310526
+\end{lstlisting}
+
+\subsection{Cross-validation and bias analysis (Dataset B reconstruction)}
+
+\lstinputlisting[language=Python, basicstyle=\ttfamily\scriptsize, caption={Dataset B cross-validation comparison and bias analysis by visitor
+type and region (independent reconstruction).}, label={lst:cv_bias_b}]{code/cv_bias_b.py}
+
+\textbf{Console output:}
+\begin{lstlisting}
 === Dataset B: plain KFold (ignores 15.5% class imbalance) ===
 Validation-fold positive rate (%): [16.7, 14.2, 15.2, 15.8, 15.5]
 PR-AUC per fold: [0.758, 0.72, 0.754, 0.762, 0.761] mean 0.751 std 0.016
@@ -87,58 +124,6 @@ PR-AUC per fold: [0.758, 0.72, 0.754, 0.762, 0.761] mean 0.751 std 0.016
 === Dataset B: StratifiedKFold (preserves 15.5% class balance each fold) ===
 Validation-fold positive rate (%): [15.5, 15.5, 15.5, 15.5, 15.5]
 PR-AUC per fold: [0.761, 0.724, 0.757, 0.758, 0.735] mean 0.747 std 0.015
-\end{lstlisting}
-
-\subsection{Learning curve generation}
-
-\lstinputlisting[language=Python, basicstyle=\ttfamily\scriptsize, caption={Learning curve generation for both datasets.}, label={lst:lc}]{code/learning_curves.py}
-
-\textbf{Console output:}
-\begin{lstlisting}
-Dataset A learning curve (train size -> WAPE):
-  n=  2340  WAPE=0.678
-  n=  4680  WAPE=0.648
-  n=  7020  WAPE=0.653
-  n=  9360  WAPE=0.607
-  n= 11700  WAPE=0.610
-  n= 14040  WAPE=0.623
-  n= 16380  WAPE=0.616
-  n= 18720  WAPE=0.616
-  n= 21060  WAPE=0.622
-  n= 23400  WAPE=0.618
-
-Dataset B learning curve (train size -> PR-AUC):
-  n=   924  PR-AUC=0.641
-  n=  1849  PR-AUC=0.690
-  n=  2774  PR-AUC=0.705
-  n=  3698  PR-AUC=0.712
-  n=  4623  PR-AUC=0.715
-  n=  5548  PR-AUC=0.721
-  n=  6472  PR-AUC=0.710
-  n=  7397  PR-AUC=0.719
-  n=  8322  PR-AUC=0.721
-  n=  9247  PR-AUC=0.720
-\end{lstlisting}
-
-\subsection{Bias analysis (Fairlearn MetricFrame equivalent)}
-
-Fairlearn's package could not be installed in the sandboxed, offline analysis environment used to
-produce this deliberation (no outbound package index access). Rather than substitute an unrelated
-tool, its \texttt{MetricFrame} methodology --- computing a metric separately for each group defined
-by a sensitive/grouping feature, and comparing the spread --- was implemented directly with
-\texttt{pandas.groupby} and scikit-learn metric functions, as shown below.
-
-\lstinputlisting[language=Python, basicstyle=\ttfamily\scriptsize, caption={Disaggregated (Fairlearn MetricFrame-equivalent) bias analysis for
-both datasets.}, label={lst:bias}]{code/bias_analysis.py}
-
-\textbf{Console output:}
-\begin{lstlisting}
-=== Dataset A: disaggregated error by product revenue tier ===
-                     n_obs         MAE      WAPE  mean_actual_demand
-tier
-Low (bottom third)  2000.0  133.297629  0.713058            186.9380
-Mid (middle third)  2000.0   82.728300  0.631494            131.0040
-High (top third)    2000.0  121.321784  0.523479            231.7605
 
 === Dataset B: disaggregated error by VisitorType ===
                    n_sessions  actual_conv_rate       FNR       FPR
@@ -161,17 +146,31 @@ Region
 9            115.0          0.173913        0.182609  0.200000  0.052632
 \end{lstlisting}
 
+Fairlearn's package could not be installed in the sandboxed, offline analysis environment used to
+produce this deliberation (no outbound package index access). Rather than substitute an unrelated
+tool, its \texttt{MetricFrame} methodology --- computing a metric separately for each group defined
+by a sensitive/grouping feature, and comparing the spread --- was implemented directly with
+\texttt{pandas.groupby} and scikit-learn metric functions, as shown in the listings above.
+
 \subsection{Reflection}
 
-The main process risk in Part 2 was that the original Task 1 code was unavailable, so the
-reconstruction could have quietly drifted from what was actually run in Task 1 without the author
-noticing. This was mitigated by validating every intermediate quantity (rows retained, panel
-shape, post-lag row count, held-out metrics) against Task 1's own reported numbers before treating
-the reconstruction as a basis for new analysis, and by explicitly disclosing the one place a new
-issue was found (the \texttt{price\_rel} look-ahead feature) rather than silently patching it. The
-bias analysis substituted a manually implemented equivalent for Fairlearn because the package
-could not be installed offline; this substitution is disclosed in Section~4.3 of the main text
-rather than presented as if Fairlearn itself had been used.
+The main process risk in Part 2 was that the original Task 1 code was not available at the start
+of this deliberation, so an initial reconstruction could have quietly drifted from what was
+actually run without the author noticing. This was mitigated in two stages: first, by validating
+every intermediate quantity (rows retained, panel shape, post-lag row count, held-out metrics)
+against Task 1's own reported numbers before treating the reconstruction as a basis for new
+analysis; second, once the author located and shared the real notebook, by replacing the
+approximate Dataset A pipeline with the exact one and re-running every downstream analysis
+(cross-validation, learning curve, bias) against it, rather than leaving the approximate numbers
+in place. Dataset B's code was not recovered in time for this deliberation, so its results are
+disclosed as an independent reconstruction rather than a verified exact match. One new issue was
+found during verification that Task 1 itself did not flag: the \texttt{price\_rel} feature is
+computed from each product's median price across the \emph{entire} panel, including weeks after
+the train/test cut-off, a mild look-ahead bias. This is disclosed in Section~1.1 of the main text
+rather than corrected retroactively, in keeping with Task 1's own principle of reporting the
+honest, weaker result. The bias analysis substituted a manually implemented equivalent for
+Fairlearn because the package could not be installed offline; this substitution is disclosed in
+Section~3 of the main text rather than presented as if Fairlearn itself had been used.
 
 %----------------------------------
 \section{Link to GitHub Repository}

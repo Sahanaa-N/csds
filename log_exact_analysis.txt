@@ -1,0 +1,24 @@
+=== CV comparison (exact features/model) ===
+Random KFold WAPE per fold: [0.66, 0.689, 0.674, 0.673, 0.644] mean 0.668
+TimeSeriesSplit WAPE per fold: [0.579, 0.602, 0.721, 0.666, 0.602] mean 0.634
+
+=== Learning curve (exact pipeline) ===
+  n=  2370  WAPE=0.643
+  n=  4740  WAPE=0.637
+  n=  7110  WAPE=0.625
+  n=  9480  WAPE=0.628
+  n= 11850  WAPE=0.621
+  n= 14220  WAPE=0.603
+  n= 16590  WAPE=0.619
+  n= 18960  WAPE=0.595
+  n= 21330  WAPE=0.609
+  n= 23700  WAPE=0.589
+
+=== Bias by product revenue tier (exact pipeline) ===
+                     n_obs         MAE      WAPE  mean_actual_demand
+tier                                                                
+Low (bottom third)  1900.0  133.857830  0.683723          195.777895
+Mid (middle third)  1900.0   76.869077  0.591996          129.847368
+High (top third)    1900.0  119.933492  0.509682          235.310526
+
+Saved figures.

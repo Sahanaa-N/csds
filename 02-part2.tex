@@ -5,31 +5,37 @@
 
 \subsection{Cross-Validation and Sampling Strategy}
 
-Individual Task 1: Part 1~\cite{nataraja2026task1} used a temporal split for Dataset A (train on
-weeks before 25 July 2011, test after) and a stratified 75/25 split for Dataset B. To check
-whether these choices actually delivered an unbiased evaluation, both datasets were re-evaluated
-here using proper cross-validation schemes --- \texttt{TimeSeriesSplit} for Dataset A and
+This section reconstructs and extends the exact pipeline used in Individual Task 1: Part
+1~\cite{nataraja2026task1}, pulled directly from the author's submitted analysis notebook, so that
+the cross-validation, learning-curve and bias results below are grounded in the real feature set,
+model hyperparameters and split (an 80th-percentile temporal cutoff on Dataset A giving
+train~=~23,700 rows and test~=~5,700 rows; a stratified 75/25 split on Dataset B), rather than an
+approximation. To check whether these choices delivered an unbiased evaluation, both datasets were
+re-evaluated using proper cross-validation schemes --- \texttt{TimeSeriesSplit} for Dataset A and
 \texttt{StratifiedKFold} for Dataset B, both from scikit-learn~\cite{pedregosa2011scikit} --- and
 compared against the naive alternative (plain random K-fold) that the original report deliberately
 avoided. Full code for this comparison is given in Appendix~\ref{sec:Process Documentation}.
 
 \subsubsection*{Dataset A: TimeSeriesSplit vs.\ random K-fold}
 
-A 5-fold random \texttt{KFold} and a 5-fold \texttt{TimeSeriesSplit} were both run on the same
-Gradient Boosting model. The random split produced a mean WAPE of 0.695 across folds (individual
-folds: 0.690, 0.749, 0.680, 0.694, 0.660), while \texttt{TimeSeriesSplit} produced a mean WAPE of
-0.638 (folds: 0.572, 0.636, 0.716, 0.662, 0.605).
+A 5-fold random \texttt{KFold} and a 5-fold \texttt{TimeSeriesSplit} were both run on the exact
+Gradient Boosting configuration from Task 1 (\texttt{max\_iter=400}, \texttt{learning\_rate=0.06},
+\texttt{min\_samples\_leaf=20}) and the exact 12-feature set, including the \texttt{is\_q4}
+calendar flag. The random split produced a mean WAPE of 0.668 across folds (individual folds:
+0.660, 0.689, 0.674, 0.673, 0.644), while \texttt{TimeSeriesSplit} produced a mean WAPE of 0.634
+(folds: 0.579, 0.602, 0.721, 0.666, 0.602).
 
 This is a useful negative result. Random K-fold did not inflate apparent performance here, because
 the same-week invoice-count leak already identified and corrected in Task 1: Part 1 was the
 dominant leakage source, and it is absent from the current feature set. What random K-fold does
 instead is understate performance on some folds and overstate it on others depending on which
 weeks land in each validation fold, since the panel is not stationary (weeks vary systematically
-with seasonality and promotional timing). \texttt{TimeSeriesSplit}'s later folds also show higher
-error (0.716) than earlier ones (0.572), which is informative in its own right: it suggests the
-relationship between demand and its lagged predictors is not constant over the two-year window, so
-a model validated only on early-period folds would look better than it will perform going forward.
-This matters more for an honest performance estimate than any leakage/no-leakage distinction.
+with seasonality and promotional timing). \texttt{TimeSeriesSplit}'s middle fold also shows
+noticeably higher error (0.721) than its neighbours (0.579, 0.602), which is informative in its
+own right: it suggests the relationship between demand and its lagged predictors is not constant
+over the two-year window, so a model validated on the wrong slice of time would look better or
+worse than it will perform going forward, independently of any leakage. This matters more for an
+honest performance estimate than the leakage/no-leakage distinction alone.
 
 A remaining methodological issue surfaced during this re-analysis: the \texttt{price\_rel} feature
 (price relative to a product's own median) is computed using each product's median price across
@@ -70,16 +76,17 @@ weeks used at each step).}
 Dataset A.}
 \end{figure}
 
-WAPE falls from 0.678 at the smallest training size (2,340 rows, roughly two months of the panel)
-to a low of 0.607 at 9,360 rows, then plateaus and drifts slightly upward and sideways between 0.61
-and 0.62 for the remainder of the curve (Figure~\ref{fig:lc_a}). This is not the smooth, monotonic
-improvement a textbook learning curve shows. Two things are happening together: more data helps up
-to a point (the model needs enough weeks to learn seasonal and momentum patterns), but beyond that
-point, adding older data can reintroduce a regime that no longer matches the test period, given the
-non-stationarity already noted above. The practical implication is that more historical data would
-not straightforwardly fix this model's WAPE of $\sim$0.61; a wider feature set (promotional flags,
-competitor price) matters more than a longer training window, echoing Task 1's original
-limitation.
+WAPE falls from 0.643 at the smallest training size (2,370 rows, roughly two months of the panel)
+to 0.589 at the full training set of 23,700 rows, but the descent is noisy rather than smooth
+(Figure~\ref{fig:lc_a}): it dips to 0.595 at 18,960 rows, then rises again to 0.609 before falling
+to its best value at the full training size. This is not the clean, monotonic improvement a
+textbook learning curve shows. More data does help on balance (the full-data WAPE of 0.589 is the
+single best point on the curve), but the fluctuations along the way confirm the panel is not
+stationary: some additional chunks of historical weeks help the model, and others introduce a
+regime that does not transfer as cleanly to the test period, given the non-stationarity already
+noted above. The practical implication is that Task 1's WAPE of 0.595--0.607 is a reasonable
+estimate of what this feature set can deliver, and further gains are more likely to come from a
+wider feature set (promotional flags, competitor price) than from a longer training window alone.
 
 \begin{figure}[h]
 \centering
@@ -133,15 +140,15 @@ tier.}
 \toprule
 \textbf{Tier} & \textbf{n (weeks)} & \textbf{MAE} & \textbf{WAPE} & \textbf{Mean demand} \\
 \midrule
-Low (bottom third)  & 2{,}000 & 133.30 & 0.713 & 186.9 \\
-Mid (middle third)  & 2{,}000 & 82.73  & 0.631 & 131.0 \\
-High (top third)    & 2{,}000 & 121.32 & 0.523 & 231.8 \\
+Low (bottom third)  & 1{,}900 & 133.86 & 0.684 & 195.8 \\
+Mid (middle third)  & 1{,}900 & 76.87  & 0.592 & 129.8 \\
+High (top third)    & 1{,}900 & 119.93 & 0.510 & 235.3 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The model is measurably worse for the lowest-revenue third of products (WAPE 0.713) than for the
-highest-revenue third (WAPE 0.523), a 19-point gap (Figure~\ref{fig:bias_a}, Table~\ref{tab:bias_a}).
+The model is measurably worse for the lowest-revenue third of products (WAPE 0.684) than for the
+highest-revenue third (WAPE 0.510), a 17-point gap (Figure~\ref{fig:bias_a}, Table~\ref{tab:bias_a}).
 This is an unbiased-looking model producing a biased business outcome: because training data and
 hyperparameter choices are dominated by the volume and revenue patterns of the best-selling lines,
 the model implicitly learns their dynamics best. In a pricing and forecasting role, this means
@@ -235,12 +242,13 @@ circularity before deployment, not simply monitored after the fact.
 
 \subsection{Summary}
 
-Re-running Task 1's methodology under proper cross-validation, a learning-curve analysis, and a
-disaggregated bias check did not overturn Task 1's headline results, but it added three findings
-the aggregate metrics concealed: a subtle look-ahead bias in the \texttt{price\_rel} feature, a
-learning curve for Dataset A that plateaus and mildly reverses rather than monotonically
-improving, and materially uneven model quality across product revenue tiers and customer visitor
-types in both datasets. None of these change the recommendation already reached in Task 1 --- that
-neither dataset alone supports deployment-grade pricing decisions --- but they show that even a
+Re-running Task 1's exact methodology (verified against the author's own submitted notebook, not
+an approximation) under proper cross-validation, a learning-curve analysis, and a disaggregated
+bias check did not overturn Task 1's headline results, but it added three findings the aggregate
+metrics concealed: a subtle look-ahead bias in the \texttt{price\_rel} feature, a learning curve
+for Dataset A that improves only noisily rather than monotonically as training data grows, and
+materially uneven model quality across product revenue tiers and customer visitor types in both
+datasets. None of these change the recommendation already reached in Task 1 --- that neither
+dataset alone supports deployment-grade pricing decisions --- but they show that even a
 technically sound single-split evaluation can understate how unevenly a model performs across the
 population it is meant to serve.

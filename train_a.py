@@ -3,46 +3,47 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor, HistGradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-panel = pd.read_csv('/home/claude/data/panel_a.csv', parse_dates=['Week'])
+panel = pd.read_csv('/home/claude/data/panel_a_exact.csv', parse_dates=['Week'])
 
-features = ['lag1','lag2','lag4','roll4','roll8','Price','price_rel','price_chg',
-            'invoices_lag1','month','weekofyear']
-target = 'Quantity'
-
-split_date = pd.Timestamp('2011-07-25')
-train = panel[panel['Week'] < split_date]
-test = panel[panel['Week'] >= split_date]
-print('train', train.shape, 'test', test.shape)
-
-Xtr, ytr = train[features], train[target]
-Xte, yte = test[features], test[target]
+FEATURES = ["qty_lag1", "qty_lag2", "qty_lag4", "qty_roll4", "qty_roll8",
+            "Price", "price_rel", "price_change", "invoices_lag1",
+            "week_of_year", "month", "is_q4"]
+TARGET = "Quantity"
+RANDOM_STATE = 42
 
 def wape(y_true, y_pred):
-    return np.abs(y_true - y_pred).sum() / np.abs(y_true).sum()
+    return np.sum(np.abs(y_true - y_pred)) / np.sum(np.abs(y_true))
 
-# Naive lag-1 baseline
-naive_pred = Xte['lag1'].values
-print('Naive  MAE %.2f RMSE %.2f WAPE %.3f' % (
-    mean_absolute_error(yte, naive_pred),
-    mean_squared_error(yte, naive_pred) ** 0.5,
-    wape(yte.values, naive_pred)))
+cutoff = panel["Week"].quantile(0.8)
+train = panel[panel["Week"] <= cutoff]
+test = panel[panel["Week"] > cutoff]
+print(f"[A] split at {cutoff.date()}: train={len(train):,} test={len(test):,}")
 
-rf = RandomForestRegressor(n_estimators=300, max_depth=12, random_state=42, n_jobs=-1)
-rf.fit(Xtr, ytr)
-rf_pred = rf.predict(Xte)
-print('RF     MAE %.2f RMSE %.2f WAPE %.3f' % (
-    mean_absolute_error(yte, rf_pred),
-    mean_squared_error(yte, rf_pred) ** 0.5,
-    wape(yte.values, rf_pred)))
+X_tr, y_tr = train[FEATURES], train[TARGET]
+X_te, y_te = test[FEATURES], test[TARGET]
 
-gb = HistGradientBoostingRegressor(max_iter=300, max_depth=6, learning_rate=0.05, random_state=42)
-gb.fit(Xtr, ytr)
-gb_pred = gb.predict(Xte)
-print('GB     MAE %.2f RMSE %.2f WAPE %.3f' % (
-    mean_absolute_error(yte, gb_pred),
-    mean_squared_error(yte, gb_pred) ** 0.5,
-    wape(yte.values, gb_pred)))
+models = {
+    "Random Forest": RandomForestRegressor(
+        n_estimators=300, min_samples_leaf=3, n_jobs=-1,
+        random_state=RANDOM_STATE),
+    "Gradient Boosting": HistGradientBoostingRegressor(
+        max_iter=400, learning_rate=0.06, min_samples_leaf=20,
+        random_state=RANDOM_STATE),
+}
 
-# save for later reuse
-import joblib
-joblib.dump({'rf': rf, 'gb': gb, 'features': features, 'train': train, 'test': test}, '/home/claude/data/models_a.pkl')
+rows = []
+rows.append({"Model": "Naive (lag-1)",
+             "MAE": mean_absolute_error(y_te, X_te["qty_lag1"]),
+             "RMSE": np.sqrt(mean_squared_error(y_te, X_te["qty_lag1"])),
+             "WAPE": wape(y_te, X_te["qty_lag1"])})
+
+for name, model in models.items():
+    model.fit(X_tr, y_tr)
+    pred = np.clip(model.predict(X_te), 0, None)
+    rows.append({"Model": name,
+                 "MAE": mean_absolute_error(y_te, pred),
+                 "RMSE": np.sqrt(mean_squared_error(y_te, pred)),
+                 "WAPE": wape(y_te, pred)})
+
+results = pd.DataFrame(rows).set_index("Model").round(3)
+print("\n[A] DEMAND FORECASTING RESULTS (exact reproduction)\n", results, "\n")
