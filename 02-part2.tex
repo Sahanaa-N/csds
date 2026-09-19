@@ -1,0 +1,246 @@
+%----------------------------------
+\section{Deliberation on Task 1}
+\label{sec:Deliberation}
+%----------------------------------
+
+\subsection{Cross-Validation and Sampling Strategy}
+
+Individual Task 1: Part 1~\cite{nataraja2026task1} used a temporal split for Dataset A (train on
+weeks before 25 July 2011, test after) and a stratified 75/25 split for Dataset B. To check
+whether these choices actually delivered an unbiased evaluation, both datasets were re-evaluated
+here using proper cross-validation schemes --- \texttt{TimeSeriesSplit} for Dataset A and
+\texttt{StratifiedKFold} for Dataset B, both from scikit-learn~\cite{pedregosa2011scikit} --- and
+compared against the naive alternative (plain random K-fold) that the original report deliberately
+avoided. Full code for this comparison is given in Appendix~\ref{sec:Process Documentation}.
+
+\subsubsection*{Dataset A: TimeSeriesSplit vs.\ random K-fold}
+
+A 5-fold random \texttt{KFold} and a 5-fold \texttt{TimeSeriesSplit} were both run on the same
+Gradient Boosting model. The random split produced a mean WAPE of 0.695 across folds (individual
+folds: 0.690, 0.749, 0.680, 0.694, 0.660), while \texttt{TimeSeriesSplit} produced a mean WAPE of
+0.638 (folds: 0.572, 0.636, 0.716, 0.662, 0.605).
+
+This is a useful negative result. Random K-fold did not inflate apparent performance here, because
+the same-week invoice-count leak already identified and corrected in Task 1: Part 1 was the
+dominant leakage source, and it is absent from the current feature set. What random K-fold does
+instead is understate performance on some folds and overstate it on others depending on which
+weeks land in each validation fold, since the panel is not stationary (weeks vary systematically
+with seasonality and promotional timing). \texttt{TimeSeriesSplit}'s later folds also show higher
+error (0.716) than earlier ones (0.572), which is informative in its own right: it suggests the
+relationship between demand and its lagged predictors is not constant over the two-year window, so
+a model validated only on early-period folds would look better than it will perform going forward.
+This matters more for an honest performance estimate than any leakage/no-leakage distinction.
+
+A remaining methodological issue surfaced during this re-analysis: the \texttt{price\_rel} feature
+(price relative to a product's own median) is computed using each product's median price across
+the entire panel, including weeks that fall after the train/test cut-off. This is a mild form of
+look-ahead bias --- the median a product settles at over its full lifetime is not knowable at any
+earlier forecast time. It did not appear in Task 1: Part 1's discussion of leakage. In a production
+pipeline this median should be computed on training-period data only and updated as new weeks
+arrive; here it is disclosed rather than corrected retroactively, following Task 1's own principle
+of reporting the honest, weaker result.
+
+\subsubsection*{Dataset B: StratifiedKFold vs.\ plain K-fold}
+
+For Dataset B, plain \texttt{KFold} produced validation folds with conversion rates ranging from
+14.2\% to 16.7\%, whereas \texttt{StratifiedKFold} held every fold at 15.5\%, matching the
+population rate exactly. Mean PR-AUC was similar either way (0.751 vs.\ 0.747), because Gradient
+Boosting is reasonably robust to this degree of imbalance drift at this sample size. But the
+fold-to-fold PR-AUC spread was slightly tighter under stratification (std 0.015 vs.\ 0.016), and
+more importantly, an unlucky plain-KFold split could place a disproportionate share of the
+already-rare positive class into one fold, making that fold's estimate unreliable at a 15.5\% base
+rate. Task 1's choice of a stratified split for Dataset B (which extends naturally to
+\texttt{StratifiedKFold} for cross-validation) is therefore justified by the same logic as WAPE
+over MAPE: the metric and the sampling strategy both need to respect the fact that the event of
+interest is rare.
+
+\subsection{Learning Curves}
+
+Learning curves were produced for the Gradient Boosting model on both datasets by progressively
+increasing the training set size and re-evaluating on the same held-out test set used in Task 1:
+Part 1.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/learning_curve_a.png}
+\caption{Dataset A --- WAPE on the fixed held-out weeks as training size grows (most recent $k$
+weeks used at each step).}
+\label{fig:lc_a}
+\Description{Line chart showing WAPE falling then plateauing as training set size increases for
+Dataset A.}
+\end{figure}
+
+WAPE falls from 0.678 at the smallest training size (2,340 rows, roughly two months of the panel)
+to a low of 0.607 at 9,360 rows, then plateaus and drifts slightly upward and sideways between 0.61
+and 0.62 for the remainder of the curve (Figure~\ref{fig:lc_a}). This is not the smooth, monotonic
+improvement a textbook learning curve shows. Two things are happening together: more data helps up
+to a point (the model needs enough weeks to learn seasonal and momentum patterns), but beyond that
+point, adding older data can reintroduce a regime that no longer matches the test period, given the
+non-stationarity already noted above. The practical implication is that more historical data would
+not straightforwardly fix this model's WAPE of $\sim$0.61; a wider feature set (promotional flags,
+competitor price) matters more than a longer training window, echoing Task 1's original
+limitation.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/learning_curve_b.png}
+\caption{Dataset B --- PR-AUC on the fixed held-out sessions as (stratified) training size grows.}
+\label{fig:lc_b}
+\Description{Line chart showing PR-AUC rising steeply then plateauing as training set size
+increases for Dataset B.}
+\end{figure}
+
+PR-AUC rises steeply from 0.641 at 924 training sessions to about 0.71--0.72 by roughly 4,600
+sessions, then plateaus with minor noise (a small dip at 6,472 sessions) through the full training
+set of 9,247 (Figure~\ref{fig:lc_b}). The curve has clearly flattened well before the full training
+set is used, which means the session classifier is not data-starved: collecting more sessions from
+the same population would yield little further gain. Combined with Task 1's finding that
+PageValues alone accounts for the majority of permutation importance, this suggests the ceiling on
+this task is set by feature richness and the PageValues leakage concern, not by sample size.
+
+\subsection{Bias Analysis}
+
+The assignment's suggested tools (Fairlearn~\cite{bird2020fairlearn}, AI Fairness 360, Google
+What-If, LinkedIn Fairness Toolkit) require package installation; Fairlearn could not be installed
+in the offline sandboxed analysis environment used for this deliberation (no outbound
+package-index access). The bias analysis below instead implements Fairlearn's core method directly
+--- disaggregating model error and outcome rates by group (its \texttt{MetricFrame}
+approach~\cite{bird2020fairlearn}) --- using pandas and scikit-learn, computing the same group-wise
+metrics Fairlearn would report. This choice is justified because neither dataset contains a
+protected demographic attribute (race, gender, age, disability, Indigenous status); the available
+grouping variables are commercial/behavioural (product revenue tier, visitor type, geographic
+region code). A general-purpose disaggregated-metrics approach applies to these groupings just as
+well as to demographic ones, and is transparent about exactly which comparison is being made.
+
+\subsubsection*{Dataset A: error by product revenue tier}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.75\linewidth]{figures/bias_a_tier.png}
+\caption{WAPE on held-out weeks, by product revenue tier (thirds of the 300 products, split by
+training-period revenue).}
+\label{fig:bias_a}
+\Description{Bar chart showing WAPE decreasing from the low-revenue tier to the high-revenue
+tier.}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\caption{Dataset A: disaggregated forecast error by product revenue tier.}
+\label{tab:bias_a}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Tier} & \textbf{n (weeks)} & \textbf{MAE} & \textbf{WAPE} & \textbf{Mean demand} \\
+\midrule
+Low (bottom third)  & 2{,}000 & 133.30 & 0.713 & 186.9 \\
+Mid (middle third)  & 2{,}000 & 82.73  & 0.631 & 131.0 \\
+High (top third)    & 2{,}000 & 121.32 & 0.523 & 231.8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The model is measurably worse for the lowest-revenue third of products (WAPE 0.713) than for the
+highest-revenue third (WAPE 0.523), a 19-point gap (Figure~\ref{fig:bias_a}, Table~\ref{tab:bias_a}).
+This is an unbiased-looking model producing a biased business outcome: because training data and
+hyperparameter choices are dominated by the volume and revenue patterns of the best-selling lines,
+the model implicitly learns their dynamics best. In a pricing and forecasting role, this means
+stock and pricing decisions for the long tail of the catalogue --- often the products a specialist
+retailer differentiates on --- would be systematically less reliable than for the products that
+would sell reasonably well regardless. This is a fairness concern in the commercial rather than
+demographic sense, but it is the kind of disparity Carlson and Worrell's broader point about whose
+interests a model is optimised for would predict (Part 1): aggregate accuracy metrics (Task 1
+reported a single WAPE of 0.595--0.607) conceal exactly this kind of distributional unevenness.
+
+\subsubsection*{Dataset B: error by visitor type and region}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\linewidth]{figures/bias_b_fnr.png}
+\caption{False Negative Rate (converting sessions the model misses) by Visitor Type and by Region
+code.}
+\label{fig:bias_b}
+\Description{Two bar charts: false negative rate by visitor type, and false negative rate by
+region code.}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\caption{Dataset B: disaggregated error by visitor type.}
+\label{tab:bias_b}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Visitor type} & \textbf{n} & \textbf{Actual conv.} & \textbf{FNR} & \textbf{FPR} \\
+\midrule
+New Visitor        & 429   & 25.6\% & 0.245 & 0.050 \\
+Returning Visitor  & 2{,}641 & 13.8\% & 0.354 & 0.072 \\
+Other              & 13    & 23.1\% & 0.000 & 0.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Returning visitors who do convert are missed by the model far more often (FNR 35.4\%) than new
+visitors who convert (FNR 24.5\%), even though returning visitors make up the large majority of
+the test set (Figure~\ref{fig:bias_b}, Table~\ref{tab:bias_b}). A plausible mechanism is that
+PageValues and browsing-depth features behave differently for a returning visitor who already
+knows what they want and converts quickly, generating a browsing signature closer to a typical
+non-converting session. Region-level FNR is more scattered --- from 20.0\% (Regions 5 and 9) to
+51.9\% (Region 6) --- but Region 6 also has the smallest positive class among the larger regions
+(204 sessions, several with very few converters), so this particular disparity should be treated
+as indicative rather than conclusive without more data. The visitor-type gap, backed by a much
+larger sample, is the more defensible finding.
+
+Neither disparity was visible in Task 1's single aggregate PR-AUC/F1 figures. If this model
+informed which sessions receive a retention offer or a live-chat prompt, converting returning
+customers would be disproportionately passed over, which is a materially different business and
+fairness outcome from what the headline metrics suggested.
+
+\subsection{Security, Privacy and Ethical Risks at Scale}
+
+\subsubsection*{Security}
+
+Both pipelines were built and validated on static, historical exports. Deployed operationally, the
+pricing/forecasting model would need to ingest live transaction and pricing feeds; an adversary
+able to inject anomalous transactions (e.g.\ wash sales or scripted bulk orders) could poison the
+lagged-demand and rolling-mean features and distort forecasts and any automated reordering or
+pricing action downstream. The conversion model, if it scored live sessions, would be exposed to
+adversarial probing --- bot traffic engineered to inflate PageValues-adjacent signals could
+manipulate which sessions get flagged as high-intent, redirecting promotional spend.
+
+\subsubsection*{Privacy}
+
+Dataset A~\cite{chen2019onlineretailii} includes a Customer ID field not used in the modelling here
+but present in the source data; at scale, the same product-week panel could easily be extended to
+a customer-week panel, at which point it becomes a behavioural profile of individual purchasing
+habits. Dataset B's~\cite{sakar2018shoppers} session-level browsing signals (page depth, exit/bounce
+rates, time on page) are similarly re-identifying if ever joined to account-level data or cookies,
+even though the released dataset itself is de-identified. Any production deployment would need to
+define retention limits, restrict which roles can join this data to identity data, and ensure the
+model does not become a de facto tracking layer beyond its stated forecasting purpose.
+
+\subsubsection*{Ethical Risks}
+
+The revenue-tier disparity above means long-tail products and, by extension, the smaller suppliers
+or niche lines behind them would receive systematically less reliable forecasting support if this
+model informed purchasing or markdown decisions at scale --- an equity concern between product
+lines rather than between people, but one with real commercial consequences for whoever depends on
+those lines. The visitor-type disparity raises a more direct concern: if conversion scores gated
+who receives a discount, a loyalty perk, or a retention call, loyal returning customers who convert
+would be under-served relative to new visitors, an outcome opposite to what most retention
+strategies intend. Because PageValues partly encodes the outcome it
+predicts~\cite{sakar2019realtime} (Task 1, Section~3.3), any high-stakes use of this classifier
+beyond the exploratory setting here would need the feature reconstructed to remove that
+circularity before deployment, not simply monitored after the fact.
+
+\subsection{Summary}
+
+Re-running Task 1's methodology under proper cross-validation, a learning-curve analysis, and a
+disaggregated bias check did not overturn Task 1's headline results, but it added three findings
+the aggregate metrics concealed: a subtle look-ahead bias in the \texttt{price\_rel} feature, a
+learning curve for Dataset A that plateaus and mildly reverses rather than monotonically
+improving, and materially uneven model quality across product revenue tiers and customer visitor
+types in both datasets. None of these change the recommendation already reached in Task 1 --- that
+neither dataset alone supports deployment-grade pricing decisions --- but they show that even a
+technically sound single-split evaluation can understate how unevenly a model performs across the
+population it is meant to serve.

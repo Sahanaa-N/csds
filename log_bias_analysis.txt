@@ -1,0 +1,30 @@
+=== Dataset A: disaggregated error by product revenue tier ===
+                     n_obs         MAE      WAPE  mean_actual_demand
+tier                                                                
+Low (bottom third)  2000.0  133.297629  0.713058            186.9380
+Mid (middle third)  2000.0   82.728300  0.631494            131.0040
+High (top third)    2000.0  121.321784  0.523479            231.7605
+
+=== Dataset B: disaggregated error by VisitorType ===
+                   n_sessions  actual_conv_rate  ...       FNR       FPR
+VisitorType                                      ...                    
+New_Visitor             429.0          0.256410  ...  0.245455  0.050157
+Other                    13.0          0.230769  ...  0.000000  0.000000
+Returning_Visitor      2641.0          0.137827  ...  0.354396  0.072025
+
+[3 rows x 5 columns]
+
+=== Dataset B: disaggregated error by Region ===
+        n_sessions  actual_conv_rate  selection_rate       FNR       FPR
+Region                                                                  
+1           1258.0          0.162957        0.163752  0.321951  0.063628
+2            269.0          0.171004        0.200743  0.304348  0.098655
+3            566.0          0.146643        0.160777  0.373494  0.080745
+4            303.0          0.158416        0.188119  0.250000  0.082353
+5             70.0          0.142857        0.200000  0.200000  0.100000
+6            204.0          0.132353        0.102941  0.518519  0.045198
+7            188.0          0.154255        0.132979  0.310345  0.031447
+8            110.0          0.081818        0.109091  0.444444  0.069307
+9            115.0          0.173913        0.182609  0.200000  0.052632
+
+Saved figures.

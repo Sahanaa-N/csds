@@ -1,0 +1,90 @@
+\documentclass[manuscript,screen,review,nonacm]{acmart}
+
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    \normalfont B\kern-0.5em{\scshape i\kern-0.25em b}\kern-0.8em\TeX}}}
+
+\input{00_macros}
+
+\begin{document}
+
+\title{Individual Task 2}
+
+\author{Sahana Nataraja (s4164152)}
+\affiliation{%
+  \institution{RMIT University}
+  \city{Melbourne}
+  \country{Australia}}
+\email{s4164152@student.rmit.edu.au}
+
+\renewcommand{\shortauthors}{Nataraja}
+
+\begin{abstract}
+  Part 1 critically reviews Carlson and Worrell's~\cite{carlson2026relational} \emph{Relational
+  Futures} position paper on Indigenous sovereignty and AI governance, illustrated with a case
+  study on predictive risk modelling in child protection. Part 2 deliberates on the ethics and
+  potential bias of the data analysis conducted in Individual Task 1: Part
+  1~\cite{nataraja2026task1}, re-running its methodology under proper cross-validation, learning
+  curves, and a disaggregated bias analysis. Part 3 provides peer-review feedback on a fellow
+  student's video presentation for Individual Task 1: Part 2.
+\end{abstract}
+
+\maketitle
+
+\input{01-part1}
+
+\clearpage
+\input{02-part2}
+
+\clearpage
+\input{03-part3}
+
+\clearpage
+\begin{center}
+    \noindent \textcolor{purple}{\emph{-- Content below this line does not count for the page/word limit. --}}
+\end{center}
+
+\section*{Generative AI Attribution and Declaration}
+\noindent
+This work was completed with substantial assistance from Claude (Anthropic). Specifically, Claude
+was used to: (i) identify and summarise the position paper and supporting academic and policy
+sources cited in Part 1; (ii) draft the executive summary text in Part 1, which the author
+reviewed, fact-checked and edited; (iii) reconstruct the Task 1 analysis pipeline in Python from
+the two raw UCI datasets supplied by the author, in order to independently verify the figures
+reported in Task 1 and to produce new analysis for Part 2 (cross-validation comparisons, learning
+curves, and a disaggregated group-wise bias analysis, since the Fairlearn package could not be
+installed in the sandboxed analysis environment used); (iv) draft the Part 2 narrative
+interpreting those results; and (v) review the peer's submitted video for Part 3 (extracting and
+inspecting video frames of the slide content, since spoken audio could not be transcribed in the
+environment used) and draft the peer feedback. The author supplied the original datasets, the
+Task 1 report, and the peer's video, reviewed all code, output, figures, and draft text produced,
+and made all final decisions about which findings to report, how to interpret them, and what to
+write. All interpretations, conclusions, and judgement calls presented in this work are the
+author's own.
+
+\noindent
+
+I certify that the submission of this assignment is incomplete without the submission of the
+completed \textbf{Condition 3 Bounded Process AI Declaration Form}.
+
+\begin{acks}
+I acknowledge the Wurundjeri Woi-wurrung and Boon Wurrung peoples of the Eastern Kulin Nation,
+the Traditional Owners of the unceded land on which RMIT University stands and on which this work
+was carried out, and pay my respects to their Elders past and present.
+
+I acknowledge the maintainers of the UCI Machine Learning Repository for making both datasets
+used in Task 1 and re-analysed here publicly available, and Carlson and Worrell for the
+Relational Futures project discussed in Part 1.
+\end{acks}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{99-references}
+
+\appendix
+\input{99-appendix}
+
+\end{document}
